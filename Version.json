@@ -1,0 +1,18 @@
+{
+"appName":"Text Replace Tool React",
+"author":"JMRY",
+"versionUpdate":[
+{
+	"mainVersion":"2.0",
+	"dateVersion":"20240118",
+	"versionName":"Milestone 1",
+	"versionDesc":[
+		"初步使用React重构。",
+		"完成基本功能。",
+	""]
+}
+],
+"featuresDemand":[
+	
+""]
+}
