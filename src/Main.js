@@ -2,19 +2,21 @@ import { useState } from 'react';
 import { rDOM } from 'react-extensions-dom';
 import * as utils from './Utils';
 import './Main.css';
-import { ReactSortable } from 'react-sortablejs';
+import { Transition, CSSTransition } from 'react-transition-group';
+import { RuleListZone, TextZone } from './Zone';
+import { EditRuleForm, SaveRuleForm } from './Form';
 
 let defaultStorageData={
 	replaceRuleList:[],
 	currentSelectRule:-1,
 	originText:``,
 }
-let replaceTypeList=[
-	{name:`插入`,key:`insert`},
-	{name:`替换`,key:`replace`},
-]
 let storageData={}
 let storageRuleMap=new Map();
+
+export {defaultStorageData, storageData, storageRuleMap};
+
+
 
 let whileMaxCount=9999;
 function applyRules(makeText, rules, extend={}){
@@ -137,19 +139,19 @@ function execFunction(itext,func,extend){
 	}
 }
 
-function applyReplaceText(){
-	let makeText=storageData.originText;
-	if(storageData.currentSelectRule>=0){
-		let curSelectedRule=storageData.replaceRuleList[storageData.currentSelectRule];
+function applyReplaceText(origin, selected){
+	let makeText=origin;
+	if(selected>=0){
+		let curSelectedRule=storageData.replaceRuleList[selected];
 		if(typeof curSelectedRule.rules==`object` && !isNaN(curSelectedRule.rules.length)){
-			makeText=applyRules(makeText,curSelectedRule.rules,{origin:storageData.originText, replace:makeText});
+			makeText=applyRules(makeText,curSelectedRule.rules,{origin:origin, replace:makeText});
 		}
 	}
-	let originTextSplit=storageData.originText.split(`\n`);
+	let originTextSplit=origin.split(`\n`);
 	let replaceTextSplit=makeText.split(`\n`);
 
 	return {
-		originText:storageData.originText, replaceText:makeText,
+		originText:origin, replaceText:makeText,
 		originLineCount:originTextSplit.length,
 		replaceLineCount:replaceTextSplit.length,
 	};
@@ -163,11 +165,11 @@ function applyRuleList(){
 	}
 }
 
-function copyContent(id){
-	let textarea=document.getElementById(id);
-	textarea.select();
-	document.execCommand(`Copy`);
-}
+storageData={
+	...defaultStorageData,
+	...utils.loadStorageData(),
+};
+utils.saveStorageData(storageData);
 
 function Main() {
 	// function applyStorageData(){
@@ -177,97 +179,126 @@ function Main() {
 	// 	applyReplaceText();
 	// }
 
-	storageData={
-		...defaultStorageData,
-		...utils.loadStorageData(),
-	};
-	utils.saveStorageData(storageData);
+	
 	// applyStorageData();
+	applyRuleList();
 
-	const [originText, setOriginText]=useState(storageData.originText);
-	const [ruleList, setRuleList]=useState(storageData.replaceRuleList);
-	const [ruleSelected, setRuleSelected]=useState(storageData.currentSelectRule);
+	const [ruleData, setRuleData]=useState({
+		originText:storageData.originText,
+		ruleList:storageData.replaceRuleList,
+		ruleSelected:storageData.currentSelectRule,
+	});
+	const [textAnim, setTextAnim]=useState(true);
+	const [showSaveForm, setShowSaveForm]=useState(false);
+	const [showEditForm, setShowEditForm]=useState(false);
+	const [editData, setEditData]=useState({index:null, content:null});
 
-	let replaceData=applyReplaceText(originText, ruleSelected);
+	let replaceData=applyReplaceText(ruleData.originText, ruleData.ruleSelected);
 
 	function handleChangeText(e){
 		storageData.originText=e.target.value;
-		utils.saveStorageData(storageData);
-		setOriginText(storageData.originText);
+		refreshRuleList();
+		// utils.saveStorageData(storageData);
+		// setOriginText(storageData.originText);
 	}
 
 	function handleClearText(){
 		if(window.confirm(`确定清空全部内容？`)){
 			storageData.originText=``;
-			utils.saveStorageData(storageData);
-			setOriginText(storageData.originText);
+			refreshRuleList();
+			// utils.saveStorageData(storageData);
+			// setOriginText(storageData.originText);
 		}
 	}
 
 	function changeRule(index){
+		setTextAnim(false);
 		console.log(`ChangeRule: ${index}`);
 		storageData.currentSelectRule=index;
-		refreshRuleList()
+		// refreshRuleList(); 刷新交给动画的回调
+	}
+
+	function addRule(){
+		setEditData({index:null, content:null});
+		setShowEditForm(true);
 	}
 
 	function editRule(index){
-
+		console.log(index);
+		setEditData({index:index, content:storageData.replaceRuleList[index]});
+		setShowEditForm(true);
 	}
 
 	function delRule(index){
-
+		if(window.confirm(`确定删除规则【${storageData.replaceRuleList[index].name}】？`)){
+			storageData.replaceRuleList.splice(index,1);
+			if(storageData.currentSelectRule>storageData.replaceRuleList.length-1){
+				storageData.currentSelectRule=storageData.replaceRuleList.length-1;
+			}
+			refreshRuleList();
+		}
 	}
 
 	function refreshRuleList(){
 		utils.saveStorageData(storageData);
-		setRuleList(storageData.replaceRuleList);
-		setRuleSelected(storageData.currentSelectRule);
-	}
-
-	function RuleListLi({key,index,name,selected}){
-		return rDOM({
-			tag:`li`, id:`replaceRuleLi_${index}`, key:key, index:index, children:[
-				{tag:`div`, id:`replaceRuleDiv_${index}`, className:`replaceRuleDiv`, children:[
-					{tag:`button`, id:`replaceRuleBu_${index}`,className: {replaceRuleBu:true, selected:selected==index}, html:name, onClick:()=>changeRule(index)},
-					{tag:`button`, id:`replaceRuleEditBu_${index}`, className:`replaceRuleEditBu replaceRuleCtrlBu`, onClick:()=>editRule(index)},
-					{tag:`button`, id:`replaceRuleDelBu_${index}`, className:`replaceRuleDelBu replaceRuleCtrlBu`, onClick:()=>delRule(index)},
-				]}
-			]
+		setRuleData({
+			...ruleData,
+			...{
+				originText:storageData.originText,
+				ruleList:storageData.replaceRuleList,
+				ruleSelected:storageData.currentSelectRule,
+			}
 		});
 	}
 
-	console.log(rDOM({tag:RuleListLi, key:111, index:222, name:333, selected:444}));
+	function setSortedRuleList(s){
+		storageData.replaceRuleList=s;
+		refreshRuleList();
+	}
+
+	function saveEditData(type,index,name,data){
+		console.log(type, index, data);
+		switch(type){
+			case `edit`:
+				if(index==null){
+					storageData.replaceRuleList.unshift({name:name,rules:data});
+				}else{
+					storageData.replaceRuleList[index]={name:name,rules:data};
+				}
+			break;
+			case `copy`:
+				let curRule=utils.cloneObject(storageData.replaceRuleList[index]);
+				storageData.replaceRuleList.splice(index+1,0,curRule);
+			break;
+		}
+		refreshRuleList();
+	}
+
+	function saveRuleData(data){
+		console.log(data);
+		storageData=data;
+		refreshRuleList();
+	}
 
 	return (rDOM([
-		{tag:`button`, id:`replaceRuleBu_add`,  className:`replaceRuleBu replaceAddBu`, html:`+`},
-		{tag:`button`, id:`replaceRuleBu_save`, className:`replaceRuleBu replaceAddBu replaceSaveBu`, html:`+`},
-		{tag:`div`, className:`replaceRuleList`, children:[
-			{tag:`ul`, tagName:`ul`, id:`replaceRuleList`, list:ruleList, setList:setRuleList, fallbackOnBody:true, children:ruleList.map((rule, index)=>(
-				{tag:RuleListLi, key:rule.id, index:index, name:rule.name, selected:ruleSelected}
-			))},
-		]},
+		{tag:`button`, id:`replaceRuleBu_add`,  className:`replaceRuleBu replaceAddBu`, html:`+`, onClick:()=>addRule()},
+		{tag:`button`, id:`replaceRuleBu_save`, className:`replaceRuleBu replaceAddBu replaceSaveBu`, html:`+`, onClick:()=>setShowSaveForm(true)},
+		{tag:RuleListZone, list:ruleData.ruleList, setList:(s)=>setSortedRuleList(s), selected:ruleData.ruleSelected, changeClick:(i)=>changeRule(i), editClick:(i)=>editRule(i), delClick:(i)=>delRule(i)},
 		{tag:`div`, id:`textZone`, className:`textZone`, children:[
-			{tag:`div`, className:`textDisplayZone`, children:[
-				{tag:`div`, id:`textOriginZone`, className:`textOriginZone`, html:`原始文本 `, children:[
-					{tag:`span`, id:`originLineCount`, className:`originLineCount`, html:replaceData.originLineCount},
-					{tag:`textarea`, id:`textOriginInput`, className:`textOriginInput textInput`, value:originText, onChange:(e)=>handleChangeText(e)},
-					{tag:`div`, className:`textOriginCtrl ctrlZone`, children:[
-						{tag:`button`, id:`textOriginCopyBu`, class:`textOriginCopyBu ctrlBu lighting`, html:`▲复制原文▲`, onClick:()=>copyContent(`textOriginInput`)},
-						` `,
-						{tag:`button`, id:`textReplaceCopyBu2`, class:`textReplaceCopyBu ctrlBu default`, html:`▼复制替换▼`, onClick:()=>copyContent(`textReplaceInput`)},
-						` `,
-						{tag:`button`, id:`textOriginClearBu`, class:`textOriginClearBu ctrlBu`, html:`清空`, onClick:handleClearText},
-					]},
-				]},
-				{tag:`div`, id:`textReplaceZone`, className:`textReplaceZone`, html:`替换文本 `, children:[
-					{tag:`span`, id:`replaceLineCount`, className:`replaceLineCount`, html:replaceData.replaceLineCount},
-					{tag:`textarea`, id:`textReplaceInput`, className:`textReplaceInput textInput`, readOnly:true, value:replaceData.replaceText},
-					{tag:`div`, className:`textReplaceCtrl ctrlZone`, children:[
-						{tag:`button`, id:`textReplaceCopyBu`, className:`textReplaceCopyBu ctrlBu default`, html:`▲复制替换▲`, onClick:()=>copyContent(`textReplaceInput`)},
-					]},
-				]},
-			]}
-		]}
+			{tag:CSSTransition, 
+				in:textAnim, timeout:125, classNames:`textZoneAnim`, 
+				onExited:()=>setTextAnim(true), 
+				onEnter:()=>refreshRuleList(), 
+				children:[
+					{tag:`div`, className:`textDisplayZone textZoneAnim`, children:[
+						{tag:TextZone, type:`origin`, lineCount:replaceData.originLineCount, text:ruleData.originText, textChange:(e)=>handleChangeText(e), clearClick:handleClearText},
+						{tag:TextZone, type:`replace`,lineCount:replaceData.replaceLineCount,text:replaceData.replaceText},
+					]}
+				]
+			}
+		]},
+		(showEditForm && {tag:EditRuleForm, index:editData.index, data:editData.content, saveData:saveEditData, showState:(b)=>setShowEditForm(b)}),
+		(showSaveForm && {tag:SaveRuleForm, data:storageData, saveData:saveRuleData, showState:(b)=>setShowSaveForm(b)}),
 	]));
 }
 

@@ -4,6 +4,14 @@
 "versionUpdate":[
 {
 	"mainVersion":"2.0",
+	"dateVersion":"20240119",
+	"versionName":"Milestone 1",
+	"versionDesc":[
+		"完成全部功能移植。",
+	""]
+},
+{
+	"mainVersion":"2.0",
 	"dateVersion":"20240118",
 	"versionName":"Milestone 1",
 	"versionDesc":[
